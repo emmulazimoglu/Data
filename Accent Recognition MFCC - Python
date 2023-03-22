@@ -1,0 +1,197 @@
+
+###### Excel dosyasında düzenleme #####
+import pandas as pd
+"""
+# Excel dosyasını oku
+df = pd.read_csv("accent-mfcc-data-1.csv")
+
+# İlk sütunu al ve virgüllerden parçala
+df = df.iloc[:,0].str.split(",", expand=True)
+
+# Yeni sütunları dataframe'e ekle
+df = pd.concat([df, df.iloc[:,1:]], axis=1)"""
+
+# İşlemin sonucunu göster
+
+df = pd.read_csv("accent-mfcc-data-1.csv")
+df.head()
+
+#Her bir sınıfa ait örnek sayısı
+
+df["language"].value_counts()
+
+#Veri seti sınıflarını ikili sisteme ayarlamak
+
+mfcc_binary = df
+
+column = "language"
+
+# Sütundaki "USA" olmayan satırları seçin
+non_usa_rows = mfcc_binary.loc[df[column] != "US"]
+
+# Seçilen satırlara "non-USA" yazın
+mfcc_binary.loc[non_usa_rows.index, column] = "non-US"
+
+mfcc_binary
+
+#İkili sınıf sisteminde, her bir sınıfa ait örnek sayısı
+
+mfcc_binary[column].value_counts()
+
+#Veri setini ikili sisteme atayalım
+
+df = mfcc_binary
+
+# Öznitelik önem sıralaması yapmak
+# Öncelikle gerekli kütüphanelerin içeri aktarılması gerekir
+from sklearn.ensemble import ExtraTreesClassifier
+
+# Veri kümesi ve hedef değişken (label) dizisi
+X = df[['X1', 'X2', 'X3', 'X4', 'X5', 'X6', 'X7', 'X8', 'X9', 'X10', 'X11', 'X12']]
+y = df.iloc[:,0]
+
+# Ağaç tabanlı seçici modeli oluşturma
+model = ExtraTreesClassifier()
+
+# Modeli veri kümesinde eğitme
+model.fit(X, y)
+
+# Özniteliklerin önem değerlerini hesaplama
+importances = model.feature_importances_
+
+sutun = list(df.columns[1::])
+liste = list(importances)
+for i in range(len(liste)):
+    liste[i] = str(liste[i])
+
+for i in range(12):
+    print(sutun[i] + " = " + liste[i])
+
+#Öznitelik önem sırası görselleştirme
+
+import matplotlib.pyplot as plt
+feat_importances = pd.Series(model.feature_importances_, index=X.columns)
+feat_importances.nlargest(12).plot(kind='barh')
+plt.show()
+
+from sklearn.model_selection import train_test_split
+X_train, X_test, y_train, y_test = train_test_split( X, y, test_size=0.20, random_state=4)
+print ('Train set:', X_train.shape,  y_train.shape)
+print ('Test set:', X_test.shape,  y_test.shape)
+
+# İlk olarak karar ağacı testi
+from sklearn.tree import DecisionTreeClassifier
+
+from sklearn.metrics import confusion_matrix
+
+
+decisiontree = DecisionTreeClassifier(random_state=0)
+model1 = decisiontree.fit(X_train, y_train)
+
+target_predicted=model1.predict(X_test)
+print("Accuracy", model1.score(X_test, y_test))
+
+matrix1 = confusion_matrix(y_test, target_predicted)
+print("Class Confusion Matrix\n", matrix1)
+
+#İkinci olarak kNN(k en yakın komşu) testi
+
+from sklearn.neighbors import KNeighborsClassifier
+
+knn = KNeighborsClassifier(n_neighbors=5)
+
+model2 = knn.fit(X_train, y_train)
+
+target_predicted=model2.predict(X_test)
+print("Accuracy", model2.score(X_test, y_test))
+
+matrix2 = confusion_matrix(y_test, target_predicted)
+print("Class Confusion Matrix\n", matrix2)
+
+from sklearn.naive_bayes import GaussianNB
+
+bayes = GaussianNB()
+
+model3 = bayes.fit(X_train, y_train)
+
+target_predicted=model3.predict(X_test)
+print("Accuracy", model3.score(X_test, y_test))
+
+matrix3 = confusion_matrix(y_test, target_predicted)
+print("Class Confusion Matrix\n", matrix3)
+
+#Sınıflandırma kıyaslamaları
+
+print("=>Karar Ağacı isabeti: ", model1.score(X_test, y_test), "\nSınıf Karışıklık Matrisi:\n", matrix1)
+print("=>kNN isabeti: ", model2.score(X_test, y_test),"\nSınıf Karışıklık Matrisi:\n", matrix2)
+print("=>Naive-Bayes isabeti: ", model3.score(X_test, y_test), "\nSınıf Karışıklık Matrisi:\n", matrix3)
+
+#k-means kümeleme 
+
+from sklearn.cluster import KMeans
+
+#Önce veri setini PCA(Temel Bileşen Analizi) ile 2 boyutlu hale indirgiyoruz
+
+from sklearn.decomposition import PCA
+
+pca = PCA(2)
+
+X_yeni = pca.fit_transform(X)
+X_yeni = pd.DataFrame(X_yeni)
+
+# K-means modelini oluştur
+kmeans = KMeans(n_clusters=2)
+
+# Modeli eğit
+kmeans.fit(X_yeni)
+
+# Kümelere ait etiketleri tahmin et
+labels = kmeans.predict(X_yeni)
+
+# Görselleştir
+plt.scatter(X_yeni[0], X_yeni[1], c=labels, s=100, cmap='viridis')
+
+centers = kmeans.cluster_centers_
+plt.scatter(centers[:, 0], centers[:, 1], c='black', s=200, alpha=0.5)
+
+plt.show()
+
+# Silhouette skoru hesapla
+from sklearn import metrics
+
+silhouette_score = metrics.silhouette_score(X_yeni, labels, metric='euclidean')
+print("Silhouette skoru: ", silhouette_score)
+
+#Spektral Kümeleme
+from sklearn.cluster import SpectralClustering
+import numpy as np
+
+#Veri setini array tipine dönüştür
+X_yeni = np.array(X_yeni)
+
+# SpectralCluster modelini oluştur
+spectral = SpectralClustering(n_clusters=2)
+spectral.fit(X_yeni)
+
+# Görselleştir
+plt.scatter(X_yeni[:, 0], X_yeni[:, 1], c=spectral.labels_,s=100, cmap='viridis')
+plt.show()
+
+# Silhouette skoru hesapla
+score = metrics.silhouette_score(X_yeni, spectral.labels_ , metric='euclidean')
+print("Silhouette score:", score)
+
+#Agglomerative Kümeleme
+from sklearn.cluster import AgglomerativeClustering
+
+# AgglomerativeClustering modeli oluştur
+agg = AgglomerativeClustering(n_clusters=2)
+agg.fit(X_yeni)
+
+# Görselleştir
+plt.scatter(X_yeni[:, 0], X_yeni[:, 1], c=agg.labels_, s=100, cmap='viridis')
+plt.show()
+
+# Silhouette skoru hesapla
+score = metrics.silhouette_score(X_yeni, agg.labels_, metric = "manhattan")
+print("Silhouette score:", score)
